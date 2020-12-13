@@ -24,16 +24,21 @@ import seaborn as sns
 # 	def service_time(self):
 # 		return np.random.uniform(low = 5, high = 8)
 
-class sim:
+class sim(que):
     def __init__(self):
+        que.__init__(self)
+        self.st = self.g_packet()
         self._simclock = None
         self.t_arrival = 0
         self.t_depart = 0
-        self.t_service = 0
-        self._maxque = None
+        self.t_service = 0        
         self.cqs = 0
-        self.sstatus = 0
+        self.sstatus = None
         self.nodes = None
+        self.npdrop = 0
+        self.n_depart = 0
+        self.t_event = 0
+        self.tmp_time = self.g_service()
 
     def sch(self):
 
@@ -49,19 +54,30 @@ class sim:
         if self._maxque is None:
             while self._maxque is None:
                 self._maxque = input("Insert maximum que size:")
+                print('---------------------------')
                 try:
                     self._maxque = int(self._maxque)
                 except:
                     self._maxque = None
                     print("Insert valid integer!")
+                    
+        self.t_event = min(self.t_arrival,self.t_depart)
 
-        t_event = min(self.t_arrival,self.t_depart)
-        self.simclock = t_event
-        print("current time:",self.simclock)
-        print("arrival time:",self.t_arrival,"departure time:",self.t_depart)
-        
+
+    def update_clock(self):
+        self.simclock = self.t_event
+
+
+    def g_service(self):
+        return round(r.uniform(0,2),2)
+
+    def g_packet(self):
+        return round(r.uniform(0,2),2)
+            
+    def event_type(self):
         if self.t_arrival <= self.t_depart:
             self.arrival_event()
+
         else:
             self.depart_event()
 
