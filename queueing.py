@@ -64,7 +64,7 @@ class sim(que):
         self.t_event = min(self.t_arrival,self.t_depart)
 
 
-    def update_clock(self):
+    def u_clock(self):
         self.simclock = self.t_event
 
 
