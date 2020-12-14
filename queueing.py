@@ -1,47 +1,67 @@
-import numpy as np
-import pandas as pd
-import seaborn as sns
+import random as r
 
-# class simulation:
-# 	def __init__(self):
-# 		self.sstatus = 0 #initial server status 0 is not busy
-# 		self.simclock = 0.00 #simclock
-# 		self.arrt = self.packet_generation() #call packet arrival function
-# 		self.dept = self.packet_departure() #call packet departure function
-# 		self.nodes = int(input('insert nodes:'))
-# 		self.npa = 0 #no of packet arrival
-# 		self.npd = 0 #no of packet departed
-# 		self.servt = self.service_time() #call service time function
-# 		self.delay = 0 #delay
-# 		self.npdl = 0 #no of packet delay
-# 		self.cqs = 0 #current que size
-# 		self.tqs = 0 #total que size
-# 		self.mqs = int(input('insert que size:')) #max que size
-
-# 	def packet_generation(self):
-# 		return np.random.lognormal(mean=0.6, sigma=0.3)
-
-# 	def service_time(self):
-# 		return np.random.uniform(low = 5, high = 8)
-
-class sim(que):
+class sim:
     def __init__(self):
-        que.__init__(self)
-        self.st = self.g_packet()
         self._simclock = None
-        self.t_arrival = 0
-        self.t_depart = 0
-        self.t_service = 0        
+        self.t_arrival = self.g_packet()    
+        self.t_depart = float('inf')
+        self.t_service = 0
+        self._maxque = None
         self.cqs = 0
-        self.sstatus = None
+        self.sstatus = 0
         self.nodes = None
         self.npdrop = 0
         self.n_depart = 0
         self.t_event = 0
+        self.n_arrival = 0
         self.tmp_time = self.g_service()
 
-    def sch(self):
+    #def sch(self):
+     #   print(1)
+            
+    def a_event(self):
+        self.sstatus += 1
+        self.n_arrival += 1
+        if self.sstatus <= 1:
+            self.temp1 = self.g_service()
+            print(">>>>Service time>>>>",self.temp1)
+            self.tmp_time=self.temp1
+            self.t_depart = self.simclock + self.temp1
+        self.t_arrival = self.simclock + self.g_packet()
 
+    def d_event(self):
+        self.sstatus -=1
+        self.n_depart += 1
+        if self.sstatus > 0:
+            self.temp2=self.g_service()
+            print(">>>>Service time<<<<",self.temp2)
+            self.tmp_time = self.temp2
+            self.t_depart = self.simclock + self.temp2
+        else:
+            self.t_depart = float('inf')
+
+    def u_clock(self):
+        self.t_event = min(self.t_arrival,self.t_depart)
+        self.simclock = self.t_event
+    
+        print("event time:",self.simclock)
+        print("arrival time:",self.t_arrival,"departure time:",self.t_depart)
+        print('---------------------------')
+            
+    def event_type(self):
+        if self.t_arrival <= self.t_depart:
+            self.a_event()
+        else:
+            self.d_event()
+
+    def g_service(self):
+        return round(r.uniform(0,2),2)
+
+    def g_packet(self):
+        return round(r.uniform(0,2),2)
+
+    def s_nq(self):
+        
         if self.nodes is None:
             while self.nodes is None:
                 self.nodes = input("Insert number of nodes:")
@@ -50,7 +70,6 @@ class sim(que):
                 except:
                     self.nodes = None
                     print("Insert valid integer!")
-
         if self._maxque is None:
             while self._maxque is None:
                 self._maxque = input("Insert maximum que size:")
@@ -61,23 +80,26 @@ class sim(que):
                     self._maxque = None
                     print("Insert valid integer!")
                     
-        self.t_event = min(self.t_arrival,self.t_depart)
+        return self.nodes
 
+    @property
+    def simclock(self):
+        return self._simclock
 
-    def u_clock(self):
-        self.simclock = self.t_event
+    @simclock.setter
+    def simclock(self,clock):
+        self._simclock = clock
 
+    def ssc(self):
+        print("sstatus number",self.sstatus)
+        
 
-    def g_service(self):
-        return round(r.uniform(0,2),2)
-
-    def g_packet(self):
-        return round(r.uniform(0,2),2)
-            
-    def event_type(self):
-        if self.t_arrival <= self.t_depart:
-            self.arrival_event()
-
-        else:
-            self.depart_event()
-
+if __name__ == "__main__":
+    
+    a = sim()
+    x = a.s_nq()
+    for i in range(0,x):
+        #a.sch()
+        a.ssc()
+        a.u_clock()
+        a.event_type()
