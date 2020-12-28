@@ -1,105 +1,129 @@
-import random as r
+import heapq as hq
+import numpy as np
 
-class sim:
+class simulation(object):
     def __init__(self):
-        self._simclock = None
-        self.t_arrival = self.g_packet()    
-        self.t_depart = float('inf')
-        self.t_service = 0
-        self._maxque = None
-        self.cqs = 0
-        self.sstatus = 0
-        self.nodes = None
-        self.npdrop = 0
-        self.n_depart = 0
-        self.t_event = 0
-        self.n_arrival = 0
-        self.tmp_time = self.g_service()
+        self.simclock = 0.0     #simulation clock
+        self.at = 0.4           #packet arrival time
+        self.dt = float('inf')  #packet departure time
+        self.et = 0.0           #event time
+        self.sink = []          #current packet in the server
+        self.n_arrival = 0      #no of packet arrival
+        self.n_depart = 0       #no of packet departure
+        self.npdrop = 0         #no of packet drop
+        self.id = 0             #packet id
+        self.status = 'idle'    #server status
+        self.cqs = 0            #current queue size
+        self.maxque = int(input("Enter maximum que:")) #maximum queue size
+        self._iat = [1.2, 0.5, 1.7, 0.2, 1.6, 0.2, 1.4, 1.9,0.8]
+        self._dpt = [2.0,0.7,0.2,1.1,3.7,0.6,float('inf')]
+        self.tdelay = 0.0       #total delay
+        self.inq = []           #packet in the queue
+        self.tmpd = 0.0         #temp value for calculating delay
+        self.t2 = None          #temp value for calculating delay
+        self.avgdelay = 0       #average delay
+        self.plr = 0.0          #packet loss rate
+        self.npdelay = 1        #no of packet delayed
 
-    #def sch(self):
-     #   print(1)
-            
-    def a_event(self):
-        self.sstatus += 1
+
+    def scheduling(self):
+        self.et = min(self.at,self.dt)  #scheduling for event timeq
+        print("server status: ",self.status)
+        print("Currently in queue: ",self.cqs)
+        print("Packet in server: ",self.sink)
+        print("Packet in queue: ",self.inq)
+        print("No of packet arrived: ",self.n_arrival)
+        print("No of packet departed: ",self.n_depart)
+        print("No of packet dropped: ",self.npdrop)
+        print("event time:",self.et)
+        print("arrival time:",self.at,"departure time:",self.dt)
+        print("------------------------------------------------")
+
+
+    def uclock(self):
+        self.simclock = self.et
+
+        
+
+    def etype(self):
+        if self.at <= self.dt:
+            self.pgf()
+        else:
+            self.pdf()
+
+
+    def pgf(self):
         self.n_arrival += 1
-        if self.sstatus <= 1:
-            self.temp1 = self.g_service()
-            print(">>>>Service time>>>>",self.temp1)
-            self.tmp_time=self.temp1
-            self.t_depart = self.simclock + self.temp1
-        self.t_arrival = self.simclock + self.g_packet()
+        self.status = 'busy'
+        if self.cqs < self.maxque:
+            self.id+=1
+            hq.heappush(self.inq,(self.id,self.at))         # store packet id and arrival time
+            self.at = self.simclock + self.pg()             # prepare new packet arrival time
 
-    def d_event(self):
-        self.sstatus -=1
-        self.n_depart += 1
-        if self.sstatus > 0:
-            self.temp2=self.g_service()
-            print(">>>>Service time<<<<",self.temp2)
-            self.tmp_time = self.temp2
-            self.t_depart = self.simclock + self.temp2
+            if len(self.sink) < 1:
+                hq.heappush(self.sink,hq.heappop(self.inq))
+                if self.cqs <= 1:
+                    self.st1 = self.sg()                    #service time
+                    print(">>>>Service time>>>>",self.st1)
+                    self.dt = self.simclock + self.st1
+            else:
+                self.cqs += 1
         else:
-            self.t_depart = float('inf')
+            self.npdrop += 1
+            self.at = self.simclock + self.pg()
 
-    def u_clock(self):
-        self.t_event = min(self.t_arrival,self.t_depart)
-        self.simclock = self.t_event
-    
-        print("event time:",self.simclock)
-        print("arrival time:",self.t_arrival,"departure time:",self.t_depart)
-        print('---------------------------')
-            
-    def event_type(self):
-        if self.t_arrival <= self.t_depart:
-            self.a_event()
+
+    def pdf(self):
+        self.status = 'idle'
+        hq.heappop(self.sink)                                   # packet departed from server
+        self.n_depart+=1                                        # no of packet depart increase
+        self.npdelay+=1
+        self.cqs -=1
+        if self.cqs >= 0:
+            self.t2 = hq.heappop(self.inq)
+            self.tmpd = self.t2[1]                              # get value to calculate delay
+            self.tdelay = self.tdelay + (self.dt - self.tmpd)   # calculate total delay
+            hq.heappush(self.sink,self.t2)                      # move packet from queue to server
+            self.st2 = self.sg()                                # set new service time
+            print(">>>>Service time<<<<",self.st2)
+            self.dt = self.simclock + self.st2                  # set time for packet departure
         else:
-            self.d_event()
+            self.cqs +=1
+            self.dt = float('inf')
 
-    def g_service(self):
-        return round(r.uniform(0,2),2)
 
-    def g_packet(self):
-        return round(r.uniform(0,2),2)
+    def result(self):
+        self.plr = self.npdrop/self.n_arrival
+        self.avgdelay = self.tdelay/self.npdelay
+        print("Packet loss rate: ",self.plr)
+        print("Total delay time: ",self.tdelay)
+        print("No of packet delay: ",self.npdelay)
+        print("Average delay: ", self.avgdelay)
 
-    def s_nq(self):
+
+    def pg(self):
+        #return 0.1
+        #return round((np.random.exponential(1/6)),2)
         
-        if self.nodes is None:
-            while self.nodes is None:
-                self.nodes = input("Insert number of nodes:")
-                try:
-                    self.nodes = int(self.nodes)
-                except:
-                    self.nodes = None
-                    print("Insert valid integer!")
-        if self._maxque is None:
-            while self._maxque is None:
-                self._maxque = input("Insert maximum que size:")
-                print('---------------------------')
-                try:
-                    self._maxque = int(self._maxque)
-                except:
-                    self._maxque = None
-                    print("Insert valid integer!")
-                    
-        return self.nodes
+        print(self._iat)
+        return self._iat.pop(0)
 
-    @property
-    def simclock(self):
-        return self._simclock
+    def sg(self):
+        #return round((np.random.exponential(1/3)),2)
+        x = self._dpt.pop(0)
+        return x
 
-    @simclock.setter
-    def simclock(self,clock):
-        self._simclock = clock
-
-    def ssc(self):
-        print("sstatus number",self.sstatus)
-        
 
 if __name__ == "__main__":
     
-    a = sim()
-    x = a.s_nq()
-    for i in range(0,x):
-        #a.sch()
-        a.ssc()
-        a.u_clock()
-        a.event_type()
+    a = simulation()
+    x = 14
+    for i in range(x):
+        a.scheduling()
+        a.uclock()
+        #a.que()
+        # a.server()
+        a.etype()
+    a.result()
+    
+    
