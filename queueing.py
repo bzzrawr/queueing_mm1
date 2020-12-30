@@ -82,7 +82,7 @@ class simulation(object):
         if self.cqs >= 0:
             self.t2 = hq.heappop(self.inq)
             self.tmpd = self.t2[1]                              # get value to calculate delay
-            self.tdelay = self.tdelay + (self.dt - self.tmpd)   # calculate total delay
+            self.calc_delay(self.dt,self.tmpd)                  # calculate total delay  
             hq.heappush(self.sink,self.t2)                      # move packet from queue to server
             self.st2 = self.sg()                                # set new service time
             print(">>>>Service time<<<<",self.st2)
@@ -90,6 +90,9 @@ class simulation(object):
         else:
             self.cqs +=1
             self.dt = float('inf')
+
+    def calc_delay(self,depT,arrT):
+        self.tdelay = self.tdelay + (depT - arrT)
 
 
     def result(self):
