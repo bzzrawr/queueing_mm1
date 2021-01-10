@@ -1,10 +1,15 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.interpolate import make_interp_spline, BSpline
 import heapq as hq
 import numpy as np
 
 class simulation(object):
-    def __init__(self):
+    def __init__(self,maxque):
+        '''initialize all the simulation value'''
+        self.meanarrivalrate = int(input("Insert arrival rate: "))
+        self.meanservicerate = int(input("Insert service rate: "))
         self.simclock = 0.0     #simulation clock
-        # self.at = 0.4           #packet arrival time
         self.at = self.pg()
         self.dt = float('inf')  #packet departure time
         self.et = 0.0           #event time
@@ -15,10 +20,8 @@ class simulation(object):
         self.id = 0             #packet id
         self.status = 'idle'    #server status
         self.cqs = 0            #current queue size
-        # self.maxque = int(input("Enter maximum que:")) #maximum queue size
-        self.maxque = 10
-        # self._iat = [1.2, 0.5, 1.7, 0.2, 1.6, 0.2, 1.4, 1.9,0.8]
-        # self._dpt = [2.0,0.7,0.2,1.1,3.7,0.6,float('inf')]
+        # self.maxque = 99999999
+        self.maxque = maxque
         self.tdelay = 0.0       #total delay
         self.inq = []           #packet in the queue
         self.tmpd = 0.0         #temp value for calculating delay
@@ -29,36 +32,35 @@ class simulation(object):
         self.arrival = 'arrive'        #
         self.departure = 'depart'
         self.evt = Event()
-        self.QQ = fifo(self.maxque,self.evt)
+        self.Queue = Queue(self.maxque,self.evt)
         self.Ser_ver = Server()
         self.totalbusy = 0.0
         self.prevEvent = 0.0
         self.sumResponse = 0.0
         self.avgQ = 0.0
         self.avgS = 0.0
+        self.result = calc_result()
+        self.iDle = 0.0
+        self.nPidle = 0
+        self.p10 = 0.0
+        self.nP10 = 0
+        self.nPnQ = 0
+        self.noQ = 0.0
+        self.graph1 = []
+        self.graph2 = []
 
+#========================================================================
+#   scheduling an event and update simulation clock
+#========================================================================
     def scheduling(self):
-        self.et = min(self.at,self.dt)  #scheduling for event time
+        self.et = min(self.at,self.dt)
         if self.at <= self.dt:
             self.evt.Event(self.arrival,self.et)
         else:
             self.evt.Event(self.departure,self.et)
-        # print("server status: ",self.status)
-        # print("Currently in queue: ",len(self.QQ.cQ()))
-        # print("Packet in server: ",self.Ser_ver._sink)
-        # print("Packet in queue: ",self.QQ.cQ())
-        # print("No of packet arrived: ",self.n_arrival)
-        # print("No of packet departed: ",self.n_depart)
-        # print("No of packet dropped: ",self.npdrop)
-        # print("event time:",self.evt.getTime())
-        # print("arrival time:",self.at,"departure time:",self.dt)
-        # print("------------------------------------------------")
-
 
     def uclock(self):
         self.simclock = self.evt.getTime()
-
-        
 
     def etype(self):
         if self.evt.getType() == 'arrive':
@@ -66,18 +68,20 @@ class simulation(object):
         else:
             self.processDeparture()
 
+#========================================================================
+#   function to schedule next packet arrival and departure
+#========================================================================
     def processArrival(self):
         self.n_arrival +=1
-        cqs = len(self.QQ.cQ())
+        cqs = len(self.Queue.cQ())
         if cqs < self.maxque:
-            self.QQ.enQ(self.evt.getTime())
+            self.Queue.enQ(self.evt.getTime())
 
             if self.Ser_ver.checkServer() == 'idle':
-                x = self.QQ.deQ()
-                self.Ser_ver.inServer(x)
+                tmpd = self.Queue.deQ()
+                self.Ser_ver.inServer(tmpd)
                 if cqs <=1:
                     st1 = self.sg()
-                    # print(">>>>>Service time>>>",st1)
                     self.dt = self.simclock + st1
             else:
                 self.totalbusy+=(self.simclock - self.prevEvent)
@@ -90,107 +94,81 @@ class simulation(object):
 
     def processDeparture(self):
         self.n_depart +=1
-        cqs = len(self.QQ.cQ())
-        finished = self.evt
-        response = (self.simclock-finished.getTime())
-        self.sumResponse +=response
+        self.npdelay +=1
+        cqs = len(self.Queue.cQ())
         self.totalbusy +=(self.simclock - self.prevEvent)
         self.avgQ += ((self.simclock - self.prevEvent)*cqs)
         self.avgS += (((self.simclock - self.prevEvent)*cqs)+(self.dt-self.simclock))
         self.prevEvent = self.simclock
         self.Ser_ver.outServer()
         if cqs > 0:
-            
-            self.Ser_ver.inServer(self.QQ.deQ())
+            tmpd = self.Queue.deQ()
+            self.calc_delay(self.dt,tmpd)
+            self.Ser_ver.inServer(tmpd)
             st2 = self.sg()
-            # print(">>>>Service time<<<<",st2)
             self.dt = self.simclock + st2
         else:
             self.dt = float('inf')
 
+#========================================================================
+#   function to generate result report
+#========================================================================
     def reportGeneration(self):
-        rho = self.totalbusy/self.simclock
-        avgr = self.sumResponse/self.n_arrival
-        avgQ = self.avgQ/self.simclock
-        avgS = self.avgS/self.simclock
+        rho = self.result._rho(self.totalbusy,self.simclock)
+        meanS = self.result._avgS(self.avgS,self.simclock)
+        meanQ = self.result._avgQ(self.avgQ,self.simclock)
+        meanSW = meanS/self.meanarrivalrate
+        meanQW = meanQ/self.meanarrivalrate
+        self.graph1 = [rho,self.iDle,self.noQ,self.p10]
+        self.graph2 = [meanS,meanQ,meanSW,meanQW]
         print("======================================")
         print("SINGLE SERVER QUEUE SIMULATION REPORT")
         print("======================================")
-        # print("MEAN INTERARRIVAL TIME",self.)
+        print("MEAN INTERARRIVAL TIME: ",self.meanarrivalrate)
+        print("MEAN SERVICE TIME: ",self.meanservicerate)
         print("SIMULATION RUNLENGTH: ",self.simclock)
         print("NUMBER OF PACKET ARRIVAL: ", self.n_arrival)
         print("NUMBER OF PACKET DEPARTURE: ", self.n_depart)
         print("SERVER UTILIZATION: ", rho)
-        print("AVERAGE RESPONSE TIME: ", avgr)
-        print("AVERAGE NUMBER IN QUEUE: ",avgQ)
-        print("AVERAGE NUMBER IN SYSTEM: ",avgS)
+        print("PROBABILITY OF IDLE: ", self.iDle)
+        print("PROBABILITY OF NO QUEUE: ",self.noQ)
+        print("PROBABILITY OF 10 PACKET IN SYSTEM: ", self.p10)
+        print("MEAN NUMBER OF PACKET IN THE SYSTEM: ",meanS)
+        print("MEAN NUMBER OF PACKET IN THE QUEUE: ",meanQ)
+        print("MEAN WAITING TIME IN THE SYSTEM: ",meanSW)
+        print("MEAN WAITING TIME IN THE QUEUE: ",meanQW)
+        print(self.graph1)
+        print(self.graph2)
 
+    def calc_delay(self,depT,arrT):
+        self.tdelay += (depT - arrT)
 
+    def cal_prob(self):
+        if len(self.Queue.cQ()) == 0 and len(self.Ser_ver._sink) == 0:
+            self.nPidle +=1
+            self.iDle = self.nPidle/self.n_arrival
 
-    # def pgf(self):
-    #     self.n_arrival += 1
-    #     self.status = 'busy'
-    #     if self.cqs < self.maxque:
-    #         self.id+=1
-    #         hq.heappush(self.inq,(self.id,self.at))         # store packet id and arrival time
-    #         self.at = self.simclock + self.pg()             # prepare new packet arrival time
+        if len(self.Queue.cQ()) == 0 and len(self.Ser_ver._sink) == 1:
+            self.nPnQ +=1
+            self.noQ = self.nPnQ/self.n_arrival
 
-    #         if len(self.sink) < 1:
-    #             hq.heappush(self.sink,hq.heappop(self.inq))
-    #             if self.cqs <= 1:
-    #                 self.st1 = self.sg()                    #service time
-    #                 print(">>>>Service time>>>>",self.st1)
-    #                 self.dt = self.simclock + self.st1
-    #         else:
-    #             self.cqs += 1
-    #     else:
-    #         self.npdrop += 1
-    #         self.at = self.simclock + self.pg()
+        if len(self.Queue.cQ()) == 9 and len(self.Ser_ver._sink) == 1:
+            self.nP10 +=1
+            self.p10 = self.nP10/self.n_arrival
 
-
-    # def pdf(self):
-    #     self.status = 'idle'
-    #     hq.heappop(self.sink)                                   # packet departed from server
-    #     self.n_depart+=1                                        # no of packet depart increase
-    #     self.npdelay+=1
-    #     self.cqs -=1
-    #     if self.cqs >= 0:
-    #         self.t2 = hq.heappop(self.inq)
-    #         self.tmpd = self.t2[1]                              # get value to calculate delay
-    #         self.calc_delay(self.dt,self.tmpd)                  # calculate total delay  
-    #         hq.heappush(self.sink,self.t2)                      # move packet from queue to server
-    #         self.st2 = self.sg()                                # set new service time
-    #         print(">>>>Service time<<<<",self.st2)
-    #         self.dt = self.simclock + self.st2                  # set time for packet departure
-    #     else:
-    #         self.cqs +=1
-    #         self.dt = float('inf')
-
-    # def calc_delay(self,depT,arrT):
-    #     self.tdelay = self.tdelay + (depT - arrT)
-
-
-    # def result(self):
-    #     self.plr = self.npdrop/self.n_arrival
-    #     self.avgdelay = self.tdelay/self.npdelay
-    #     print("Packet loss rate: ",self.plr)
-    #     print("Total delay time: ",self.tdelay)
-    #     print("No of packet delay: ",self.npdelay)
-    #     print("Average delay: ", self.avgdelay) 
-
-
+#========================================================================
+#   function to generate packet and service
+#========================================================================
     def pg(self):
-        #return 0.1
-        return np.random.exponential(1/8)
+        return np.random.exponential(1/self.meanarrivalrate)
         
-        # print(self._iat)
-        # return self._iat.pop(0)
-
     def sg(self):
-        return np.random.exponential(1/9)
-        # x = self._dpt.pop(0)
-        # return x
+        return np.random.exponential(1/self.meanservicerate)
 
+
+#========================================================================
+#   class to store event, packet in queue and packet in server
+#========================================================================
 class Event(object):
     def __init__(self):
         self._time = None
@@ -205,23 +183,11 @@ class Event(object):
     def getTime(self):
         return self._time
 
-class fifo:
+class Queue:
     def __init__(self,maxQ,evt):
         self._que = []
         self.maxQ = maxQ
         self.evt = evt
-        # self.serber = Server()
-
-
-    # def runFifo(self):
-    #     if self.evt.getType()== 'arrive':
-    #         if len(self._que)< self.maxQ:
-    #             self.enQ(self.evt.getTime())
-    #             self.at 
-    #             if self.serber.checkServer() == 'idle':
-    #                 self.serber.inServer(self.deQ())
-            
-
 
     def enQ(self,packet):
         hq.heappush(self._que,packet)
@@ -253,19 +219,113 @@ class Server:
 
         return self.status
 
-        
+#========================================================================
+#   class to calculate result
+#========================================================================
+
+class calc_result:
+    def __init__(self):
+        self.rho = 0.0
+        self.avgdelay = 0.0
+        self.avgQ = 0.0
+        self.avgS = 0.0
+        self.plr = 0.0
+
+    def _rho(self,totalbusy,simclock):
+        self.rho = totalbusy/simclock
+        return self.rho
+
+    def _avgdelay(self,tdelay,npdelay):
+        self.avgdelay = tdelay/npdelay
+        return self.avgdelay
+
+    def _avgQ(self,avgQ,simclock):
+        self.avgQ = avgQ/simclock
+        return self.avgQ
+
+    def _avgS(self,avgS,simclock):
+        self.avgS = avgS/simclock
+        return self.avgS
+
+    def _plr(self,npdrop,n_arrival):
+        self.plr = npdrop/n_arrival
+        return self.plr
+#========================================================================
+#   class to plot graph
+#========================================================================
+class plot_graph:
+    def __init__(self):
+        self.index = np.arange(4)
+        self.column1 = ['Traffic intensity','P0','No queue','P10']
+
+    def var_param1(self,value1,value2):
+        fig1, (df1,df2) = plt.subplots(2)
+        df1.plot(self.column1,value1,marker="D",color='#18A700')
+        df1.set_ylabel('Probability')
+        df1.set_title('M/M/1:∞/∞')
+        df2.plot(self.column1,value2,marker="D",color='#22EC00')
+        df2.set_ylabel('Probability')
+        df2.set_title('M/M/1:N/∞')
+
+    def var_param2(self,value1,value2):
+        fig2, df2 = plt.subplots()
+        x = np.array([1,2,3,4])
+        xnew = np.linspace(x.min(),x.max(),150)
+
+        y1 = np.array(value1)
+        y2 = np.array(value2)
+
+        sp1 = make_interp_spline(x,y1,k=2)
+        sp2 = make_interp_spline(x,y2,k=3)
+        y_smooth1 = sp1(xnew)
+        y_smooth2 = sp2(xnew)
+        plt.plot(xnew, y_smooth1, linestyle='-',color='green',label='M/M/1:∞/∞')
+        plt.plot(x,y1, 'o', color='green')
+        plt.plot(xnew, y_smooth2, linestyle='-',color='red',label = 'M/M/1:N/∞')
+        plt.plot(x,y2, 'o', color='red')
+        plt.xticks(self.index+1,('Ls','Lq','Ws','Wq'))
+        plt.ylabel('Probability')
+        plt.title('Probability of various parameters Ls, Lq, Ws & Wq')
+        plt.legend()
+        return plt.show()
+
+#========================================================================
+#   main program that will run the simulation accordingly
+#========================================================================        
 if __name__ == "__main__":
-    
-    a = simulation()
-    x = 99999 
-    np.random.seed(0)
-    for i in range(x):
-        a.scheduling()
-        a.uclock()
-        #a.que()
-        # a.server()
-        a.etype()
-    a.reportGeneration()
-    # a.result()
+    b = plot_graph()
+    typ = []
+    for runSim in range(2):
+        while True:
+            try:
+                maxque = float(input("Enter maximum queue size: "))
+                break
+            except ValueError:
+                print("Enter valid number!")
+
+        a = simulation(maxque)
+        x = 99999
+        # x = 13
+        np.random.seed(0)
+        if maxque == float('inf'):
+            for i in range(x):
+                a.scheduling()
+                a.uclock()
+                a.etype()
+                a.cal_prob()
+            a.reportGeneration()
+            typ.append(a.graph1)
+            typ.append(a.graph2)
+        else:
+            for i in range(x):
+                a.scheduling()
+                a.uclock()
+                a.etype()
+                a.cal_prob()
+            a.reportGeneration()
+            typ.append(a.graph1)
+            typ.append(a.graph2)
+    b.var_param1(typ[0],typ[2])
+    b.var_param2(typ[1],typ[3])
     
     
