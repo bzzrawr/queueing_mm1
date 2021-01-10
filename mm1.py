@@ -5,10 +5,10 @@ import heapq as hq
 import numpy as np
 
 class simulation(object):
-    def __init__(self,maxque):
+    def __init__(self,maxque,iat):
         '''initialize all the simulation value'''
-        self.meanarrivalrate = int(input("Insert arrival rate: "))
-        self.meanservicerate = int(input("Insert service rate: "))
+        self.meanarrivalrate = iat
+        self.meanservicerate = 10
         self.simclock = 0.0     #simulation clock
         self.at = self.pg()
         self.dt = float('inf')  #packet departure time
@@ -20,13 +20,9 @@ class simulation(object):
         self.id = 0             #packet id
         self.status = 'idle'    #server status
         self.cqs = 0            #current queue size
-        # self.maxque = 99999999
         self.maxque = maxque
-        self.tdelay = 0.0       #total delay
-        self.inq = []           #packet in the queue
         self.tmpd = 0.0         #temp value for calculating delay
         self.t2 = None          #temp value for calculating delay
-        self.avgdelay = 0       #average delay
         self.plr = 0.0          #packet loss rate
         self.npdelay = 1        #no of packet delayed
         self.arrival = 'arrive'        #
@@ -36,18 +32,14 @@ class simulation(object):
         self.Ser_ver = Server()
         self.totalbusy = 0.0
         self.prevEvent = 0.0
-        self.sumResponse = 0.0
         self.avgQ = 0.0
-        self.avgS = 0.0
+        self.meanSW = 0.0
         self.result = calc_result()
-        self.iDle = 0.0
-        self.nPidle = 0
-        self.p10 = 0.0
-        self.nP10 = 0
-        self.nPnQ = 0
-        self.noQ = 0.0
-        self.graph1 = []
-        self.graph2 = []
+        self.meanQW = 0.0
+        self.meanSW = 0.0
+        self.meanQ = 0.0
+        self.meanS = 0.0
+        self.rho = 0.0
 
 #========================================================================
 #   scheduling an event and update simulation clock
@@ -89,7 +81,7 @@ class simulation(object):
             self.npdrop+=1
         self.at = self.simclock + self.pg()
         self.avgQ += ((self.simclock - self.prevEvent)*cqs)
-        self.avgS += (((self.simclock - self.prevEvent)*cqs)+(self.dt-self.simclock))
+        self.meanSW += (((self.simclock - self.prevEvent)*cqs)+(self.dt-self.simclock))
         self.prevEvent = self.simclock
 
     def processDeparture(self):
@@ -98,12 +90,11 @@ class simulation(object):
         cqs = len(self.Queue.cQ())
         self.totalbusy +=(self.simclock - self.prevEvent)
         self.avgQ += ((self.simclock - self.prevEvent)*cqs)
-        self.avgS += (((self.simclock - self.prevEvent)*cqs)+(self.dt-self.simclock))
+        self.meanSW += (((self.simclock - self.prevEvent)*cqs)+(self.dt-self.simclock))
         self.prevEvent = self.simclock
         self.Ser_ver.outServer()
         if cqs > 0:
             tmpd = self.Queue.deQ()
-            self.calc_delay(self.dt,tmpd)
             self.Ser_ver.inServer(tmpd)
             st2 = self.sg()
             self.dt = self.simclock + st2
@@ -114,47 +105,12 @@ class simulation(object):
 #   function to generate result report
 #========================================================================
     def reportGeneration(self):
-        rho = self.result._rho(self.totalbusy,self.simclock)
-        meanS = self.result._avgS(self.avgS,self.simclock)
-        meanQ = self.result._avgQ(self.avgQ,self.simclock)
-        meanSW = meanS/self.meanarrivalrate
-        meanQW = meanQ/self.meanarrivalrate
-        self.graph1 = [rho,self.iDle,self.noQ,self.p10]
-        self.graph2 = [meanS,meanQ,meanSW,meanQW]
-        print("======================================")
-        print("SINGLE SERVER QUEUE SIMULATION REPORT")
-        print("======================================")
-        print("MEAN INTERARRIVAL TIME: ",self.meanarrivalrate)
-        print("MEAN SERVICE TIME: ",self.meanservicerate)
-        print("SIMULATION RUNLENGTH: ",self.simclock)
-        print("NUMBER OF PACKET ARRIVAL: ", self.n_arrival)
-        print("NUMBER OF PACKET DEPARTURE: ", self.n_depart)
-        print("SERVER UTILIZATION: ", rho)
-        print("PROBABILITY OF IDLE: ", self.iDle)
-        print("PROBABILITY OF NO QUEUE: ",self.noQ)
-        print("PROBABILITY OF 10 PACKET IN SYSTEM: ", self.p10)
-        print("MEAN NUMBER OF PACKET IN THE SYSTEM: ",meanS)
-        print("MEAN NUMBER OF PACKET IN THE QUEUE: ",meanQ)
-        print("MEAN WAITING TIME IN THE SYSTEM: ",meanSW)
-        print("MEAN WAITING TIME IN THE QUEUE: ",meanQW)
-        print(self.graph1)
-        print(self.graph2)
-
-    def calc_delay(self,depT,arrT):
-        self.tdelay += (depT - arrT)
-
-    def cal_prob(self):
-        if len(self.Queue.cQ()) == 0 and len(self.Ser_ver._sink) == 0:
-            self.nPidle +=1
-            self.iDle = self.nPidle/self.n_arrival
-
-        if len(self.Queue.cQ()) == 0 and len(self.Ser_ver._sink) == 1:
-            self.nPnQ +=1
-            self.noQ = self.nPnQ/self.n_arrival
-
-        if len(self.Queue.cQ()) == 9 and len(self.Ser_ver._sink) == 1:
-            self.nP10 +=1
-            self.p10 = self.nP10/self.n_arrival
+        self.rho = self.result._rho(self.totalbusy,self.simclock)
+        self.meanS = self.result._meanSW(self.meanSW,self.simclock)
+        self.meanQ = self.result._avgQ(self.avgQ,self.simclock)
+        self.meanSW = self.meanS/self.meanarrivalrate
+        self.meanQW = self.meanQ/self.meanarrivalrate
+        self.plr = self.result._plr(self.npdrop,self.n_arrival)
 
 #========================================================================
 #   function to generate packet and service
@@ -226,26 +182,22 @@ class Server:
 class calc_result:
     def __init__(self):
         self.rho = 0.0
-        self.avgdelay = 0.0
+        self.meanQWelay = 0.0
         self.avgQ = 0.0
-        self.avgS = 0.0
+        self.meanSW = 0.0
         self.plr = 0.0
 
     def _rho(self,totalbusy,simclock):
         self.rho = totalbusy/simclock
         return self.rho
 
-    def _avgdelay(self,tdelay,npdelay):
-        self.avgdelay = tdelay/npdelay
-        return self.avgdelay
-
     def _avgQ(self,avgQ,simclock):
         self.avgQ = avgQ/simclock
         return self.avgQ
 
-    def _avgS(self,avgS,simclock):
-        self.avgS = avgS/simclock
-        return self.avgS
+    def _meanSW(self,meanSW,simclock):
+        self.meanSW = meanSW/simclock
+        return self.meanSW
 
     def _plr(self,npdrop,n_arrival):
         self.plr = npdrop/n_arrival
@@ -255,38 +207,42 @@ class calc_result:
 #========================================================================
 class plot_graph:
     def __init__(self):
-        self.index = np.arange(4)
-        self.column1 = ['Traffic intensity','P0','No queue','P10']
+        self.index = np.arange(100)
+        self.fig1, (self.df1,self.df2) = plt.subplots(2)
+        # self.fig2, self.df2 = plt.subplots()
+    def average_delay(self,data):
+        self.df1.plot(self.index,data,color='red', label='Wq')
+        self.df1.set_ylabel('TIME (s)', fontsize=7)
+        self.df1.set_xlabel('MEAN RATE OF ARRIVAL (λ)', fontsize=7)
+        self.df1.legend()
+        self.df1.set_title('AVERAGE WAITING TIME IN THE SYSTEM (Ws) VS AVERAGE WAITING TIME IN THE QUEUE (Wq)',fontsize=7)
+        
+    def average_system(self,data):
+        self.df1.plot(self.index,data,color='green', label='Ws')
+        
+    def average_packetS(self,data):
+        self.df2.plot(self.index,data,color='yellow', label='Ls')
+        self.df2.set_xlabel('MEAN RATE OF ARRIVAL (λ)', fontsize=7)
+        self.df2.set_ylabel('TIME (s)', fontsize=7)
+        self.df2.legend()
+        self.df2.set_title('AVERAGE PACKET IN THE SYSTEM (Ls) VS AVERAGE PACKET IN THE QUEUE (Lq)',fontsize=7)
 
-    def var_param1(self,value1,value2):
-        fig1, (df1,df2) = plt.subplots(2)
-        df1.plot(self.column1,value1,marker="D",color='#18A700')
-        df1.set_ylabel('Probability')
-        df1.set_title('M/M/1:∞/∞')
-        df2.plot(self.column1,value2,marker="D",color='#22EC00')
-        df2.set_ylabel('Probability')
-        df2.set_title('M/M/1:N/∞')
+    def average_packetQ(self,data):
+        self.df2.plot(self.index, data,color='blue', label='Lq')
+        self.df2.legend()
 
-    def var_param2(self,value1,value2):
-        fig2, df2 = plt.subplots()
-        x = np.array([1,2,3,4])
-        xnew = np.linspace(x.min(),x.max(),150)
+    def cpu_util(self,data):
+        fig5, df5 = plt.subplots()
+        df5.plot(self.index,data,color='cyan')
+        df5.set_xlabel('MEAN RATE OF ARRIVAL(λ)')
+        df5.set_ylabel('TRAFFIC INTENSITY (ρ)')
 
-        y1 = np.array(value1)
-        y2 = np.array(value2)
+    def packet_loss_ratio(self,data):
+        fig6, df6 = plt.subplots()
+        df6.plot(self.index,data,color='magenta')
+        df6.set_xlabel('MEAN RATE OF ARRIVAL(λ)')
+        df6.set_ylabel('PACKET LOSS RATIO')    
 
-        sp1 = make_interp_spline(x,y1,k=2)
-        sp2 = make_interp_spline(x,y2,k=3)
-        y_smooth1 = sp1(xnew)
-        y_smooth2 = sp2(xnew)
-        plt.plot(xnew, y_smooth1, linestyle='-',color='green',label='M/M/1:∞/∞')
-        plt.plot(x,y1, 'o', color='green')
-        plt.plot(xnew, y_smooth2, linestyle='-',color='red',label = 'M/M/1:N/∞')
-        plt.plot(x,y2, 'o', color='red')
-        plt.xticks(self.index+1,('Ls','Lq','Ws','Wq'))
-        plt.ylabel('Probability')
-        plt.title('Probability of various parameters Ls, Lq, Ws & Wq')
-        plt.legend()
         return plt.show()
 
 #========================================================================
@@ -294,38 +250,35 @@ class plot_graph:
 #========================================================================        
 if __name__ == "__main__":
     b = plot_graph()
-    typ = []
-    for runSim in range(2):
-        while True:
-            try:
-                maxque = float(input("Enter maximum queue size: "))
-                break
-            except ValueError:
-                print("Enter valid number!")
+    meanQW = []                 #   store value for average waiting time in the queue
+    meanSW = []                 #   store value for average waitint time in the system
+    meanQ = []                  #   store value for average packet in queue
+    meanS = []                  #   store value for average packet in the system
+    traffic_intensity = []      #   store value for traffic intensity
+    plr = []                    #   store value for packet loss ratio
 
-        a = simulation(maxque)
-        x = 99999
-        # x = 13
+    for runSim in range(1,101): #load (λ) iteration
+        a = simulation(10,runSim)
+        totalpacket = 50000     #total packet sent
+        x = totalpacket * 2
         np.random.seed(0)
-        if maxque == float('inf'):
-            for i in range(x):
-                a.scheduling()
-                a.uclock()
-                a.etype()
-                a.cal_prob()
-            a.reportGeneration()
-            typ.append(a.graph1)
-            typ.append(a.graph2)
-        else:
-            for i in range(x):
-                a.scheduling()
-                a.uclock()
-                a.etype()
-                a.cal_prob()
-            a.reportGeneration()
-            typ.append(a.graph1)
-            typ.append(a.graph2)
-    b.var_param1(typ[0],typ[2])
-    b.var_param2(typ[1],typ[3])
+        for i in range(x):
+            a.scheduling()
+            a.uclock()
+            a.etype()
+        a.reportGeneration()
+        meanQW.append(a.meanQW)
+        meanSW.append(a.meanSW)
+        meanQ.append(a.meanQ)
+        meanS.append(a.meanS)
+        traffic_intensity.append(a.rho)
+        plr.append(a.plr)
+
+    b.average_packetS(meanS)
+    b.average_packetQ(meanQ)
+    b.average_system(meanSW)
+    b.average_delay(meanQW)
+    b.cpu_util(traffic_intensity)
+    b.packet_loss_ratio(plr)
     
     
