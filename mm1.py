@@ -257,18 +257,39 @@ class plot_graph:
     def __init__(self):
         self.index = np.arange(4)
         self.column1 = ['Traffic intensity','P0','No queue','P10']
+        self.bar1 = None
+        self.bar2 = None
+        self.mm1inf = [0.89,0.11,0.20,0.03]
+        self.mm1N = [0.89,0.15,0.28,0.05]
 
-    def var_param1(self,value1,value2):
-        fig1, (df1,df2) = plt.subplots(2)
-        df1.plot(self.column1,value1,marker="D",color='#18A700')
-        df1.set_ylabel('Probability')
-        df1.set_title('M/M/1:∞/∞')
-        df2.plot(self.column1,value2,marker="D",color='#22EC00')
-        df2.set_ylabel('Probability')
-        df2.set_title('M/M/1:N/∞')
+    # def var_param1(self,value1,value2):
+    #     fig1, (df1,df2) = plt.subplots(2)
+    #     df1.plot(self.column1,value1,marker="D",color='#18A700',label='Simulation')
+    #     df1.set_ylabel('Probability')
+    #     df1.set_title('M/M/1:∞/∞')
+    #     df1.plot(self.column1, self.mm1inf,marker="D",color='#FF0000',label='Calculation')
+    #     df2.plot(self.column1,value2,marker="D",color='#22EC00',label='Simulation')
+    #     df2.set_ylabel('Probability')
+    #     df2.set_title('M/M/1:N/∞')
+    #     plt.legend()
+    def var_param1_1(self,value):
+        fig1, ax = plt.subplots()
+        ax.plot(self.column1,value,marker="D",color='#18A700',label='Simulation')
+        ax.plot(self.column1, self.mm1inf,marker="D",color='#FF0000',label='Calculation')
+        ax.set_ylabel('Probability')
+        ax.set_title('M/M/1:∞/∞')
+        plt.legend()
+
+    def var_param1_2(self,value):
+        fig2, ax = plt.subplots()
+        ax.plot(self.column1,value,marker="D",color='#22EC00',label='Simulation')
+        ax.plot(self.column1, self.mm1N,marker="D",color='#FF0000',label='Calculation')
+        ax.set_ylabel('Probability')
+        ax.set_title('M/M/1:N/∞')
+        plt.legend()
 
     def var_param2(self,value1,value2):
-        fig2, df2 = plt.subplots()
+        fig3, ax = plt.subplots()
         x = np.array([1,2,3,4])
         xnew = np.linspace(x.min(),x.max(),150)
 
@@ -287,7 +308,35 @@ class plot_graph:
         plt.ylabel('Probability')
         plt.title('Probability of various parameters Ls, Lq, Ws & Wq')
         plt.legend()
+        
+
+    def bar_chart_1(self,value1,value2):
+        fig4, ax = plt.subplots()
+        self.bar1 = value1
+        self.bar2 = value2
+        bar_width = 0.35
+        opacity = 0.8
+
+        rects1 = plt.bar(self.index, self.bar1,bar_width, alpha=opacity, color='green', label = 'M/M/1:∞/∞')
+        rects2 = plt.bar(self.index+bar_width, self.bar2, bar_width, alpha = opacity, color='red', label = 'M/M/1:N/∞')
+        plt.ylabel('Probability')
+        plt.title('Comparison Between Queuing Model (Simulation)')
+        plt.xticks(self.index + bar_width,('Traffic intensity','P0','No queue','P10'))
+        plt.legend()
+
+    def bar_chart_2(self):
+        fig5, ax = plt.subplots()
+        bar_width = 0.35
+        opacity = 0.8
+
+        rects1 = plt.bar(self.index, self.mm1inf,bar_width, alpha=opacity, color='#22EC00', label = 'M/M/1:∞/∞')
+        rects2 = plt.bar(self.index+bar_width, self.mm1N, bar_width, alpha = opacity, color='#FF3399', label = 'M/M/1:N/∞')
+        plt.ylabel('Probability')
+        plt.title('Comparison Between Queuing Model (Calculation)')
+        plt.xticks(self.index + bar_width,('Traffic intensity','P0','No queue','P10'))
+        plt.legend()
         return plt.show()
+
 
 #========================================================================
 #   main program that will run the simulation accordingly
@@ -325,7 +374,9 @@ if __name__ == "__main__":
             a.reportGeneration()
             typ.append(a.graph1)
             typ.append(a.graph2)
-    b.var_param1(typ[0],typ[2])
+    b.var_param1_1(typ[0])
+    b.var_param1_2(typ[2])
     b.var_param2(typ[1],typ[3])
-    
+    b.bar_chart_1(typ[0],typ[2])
+    b.bar_chart_2()    
     
